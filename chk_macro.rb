@@ -1,6 +1,6 @@
 #!/usr/bin/ruby -w
 
-directory = "/home/mwnock/uvm-1.1d/src"
+directory = "/home/mwnock/tmp/uvm-1.1d/src"
 macro_db  = Hash.new
 buffer    = ""
 debug_cnt = 0
@@ -81,14 +81,22 @@ Dir::glob("**/*.sv*"){ |file|
         # puts "----- " + file
         # puts line
         line.chomp
-        next if(/^\s*\/\/.*/ =~ line)	# skip verilog comment
+
+        begin
+          next if(/^\s*\/\/.*/ =~ line)	# skip verilog comment
+        rescue
+          puts "*E Error detected while comment check. So skip this line. File=" + \
+               directory + "/" + file + ", skip line is " + f.lineno.to_s
+          next
+        end
+
         # macro = Macro.new if(/^\s*\`define/ =~ line)
 
         if(/^\s*\`define\s+(\w+)\s*\\/ =~ line)then  # detect define macro (no arg)
           item.name  = $1
           item.lines = 1
           item.args  = ""
-          item.filename = file
+          item.filename = directory + "/" + file
           item.fileline = f.lineno
           sw          = true
           buffer      = ""
@@ -98,7 +106,7 @@ Dir::glob("**/*.sv*"){ |file|
           item.name  = $1
           item.lines = 1
           item.args  = $2
-          item.filename = file
+          item.filename = directory + "/" + file
           item.fileline = f.lineno
           sw          = true
           buffer      = ""
@@ -109,7 +117,7 @@ Dir::glob("**/*.sv*"){ |file|
           item.lines    = 0
           item.args     = ""
           item.contents = line
-          item.filename = file
+          item.filename = directory + "/" + file
           item.fileline = f.lineno
           sw             = false
           macro_db[$1]   = item.clone
@@ -121,7 +129,7 @@ Dir::glob("**/*.sv*"){ |file|
           # puts "----- " + file
           # puts line
           item.contents = line
-          item.filename = file
+          item.filename = directory + "/" + file
           item.fileline = f.lineno
           sw             = false
           macro_db[$1]   = item.clone
