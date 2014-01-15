@@ -18,18 +18,16 @@ elsif(keyword=="-c")then
   keyword = STDIN.gets.chomp
 end
 
-#if(directory==".")then
-  directory += "/"
-#end
+if(directory==nil)then
+  directory = "."
+end
+
+directory += "/"
 
 if(extension==nil)then
   extension = "*"
 else
   extension = "*." + extension
-end
-
-if(directory==nil)then
-  directory = "./"
 end
 
 class CheckFile
