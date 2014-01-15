@@ -18,9 +18,9 @@ elsif(keyword=="-c")then
   keyword = STDIN.gets.chomp
 end
 
-if(directory==".")then
+#if(directory==".")then
   directory += "/"
-end
+#end
 
 if(extension==nil)then
   extension = "*"
