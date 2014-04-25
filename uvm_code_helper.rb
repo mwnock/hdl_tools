@@ -1,7 +1,27 @@
 #!/usr/bin/ruby -w
 
-tool_name = "uvm_code_helper > "
-idt       = "    "
+tool_name  = "uvm_code_helper > "
+idt        = "    "
+idt_sw     = true
+item_array = []
+
+class Item
+  def initialize(m,a,b,c=nil)
+    @mode  = m
+    @comp  = a
+    @inst  = b
+    @param = c
+  end
+  def get_comp_info
+    return [@inst,@comp,@param]
+  end
+  def get_mode
+    @mode
+  end
+  def get_len
+    @inst.length
+  end
+end
 
 mode_kind = 0
 while( !(mode_kind>=1 && mode_kind<=2) )do
@@ -127,11 +147,6 @@ elsif mode_kind==2 then
   end
   info_array = info_array[0..info_array.size-2]
   
-  #puts "---"
-  #info_array.each do |line|
-  #  puts line
-  #end
-  
   quest = 0
   while( !(quest>=1 && quest<=2) )do
     puts tool_name + "What kind of code do you want to generate ?"
@@ -149,51 +164,50 @@ elsif mode_kind==2 then
     mode = 0
     ### 構文解析
     if(/^\s*(\w+)\s+(\w+)/ =~ line)then	# not parameterized class
-      items = line.split(/\s+/)
-      comp = items[0]
-      inst = items[1]
-      #puts "mode1 comp=#{comp}, inst=#{inst}"
-      mode = 1
-    # elsif(/^\s*(\w+)\s*\#\(\s*(\w+)\s*\)\s+(\w+)/ =~ line)then	# parameterized class (hoge)
-    elsif(/\#/ =~ line)then
-      line  = line.gsub(/#/," ")
-      line  = line.gsub(/\(/,"")
-      line  = line.gsub(/\)/,"")
-      items = line.split(/\s+/)
-      comp  = items[0]
-      param = items[1]
-      inst  = items[2]
-      #puts "mode2 comp=#{comp}, param=#{param}, inst=#{inst}"
-      mode  = 2
+      item_array.push Item.new(1,$1,$2)
+    elsif(/^\s*(\w+)\s*#\(\s*(\w+)\s*\)\s+(\w+)/=~ line)then	# parameterized class
+      item_array.push Item.new(2,$1,$3,$2)
     else
       puts tool_name + "Failed to analyze code... -> #{line}"
       next
     end
-  
-    ### create component
-    if quest==1 then
-      if mode==1 then      # not parameterized class
-        puts "#{inst} = #{comp}::type_id::create(\"#{inst}\", this);"
-      elsif mode==2 then  # parameterized class
-        puts "#{inst} = #{comp}\#(#{param})::type_id::create(\"#{inst}\", this);"
-      else
-        puts tool_name + "E001 Program BUG!!!"
-        next
-      end
-  
-    ### create sequence
-    elsif quest==2 then
-      if mode==1 then
-        puts "--- case1 ---"
-        puts "#{inst} = #{comp}::type_id::create(\"#{inst}\")";
-        puts "--- case2 ---"
-        puts "#{inst} = #{comp}::type_id::create(\"#{inst}\",,get_full_name())";
-      else
-        puts tool_name + "Failed to analyze sequence instance code..."
-      end
+  end
+end
+
+### check length
+len = 0
+item_array.each do |item|
+  len = item.get_len if(len < item.get_len)
+end
+
+### extract
+item_array.each do |item|
+  ta = item.get_comp_info	# tmp_array
+  ti = 1                        # tmp_indent
+  ti = 1+len-item.get_len if(idt_sw)
+  ### create component
+  if quest==1 then
+    if item.get_mode==1 then      # not parameterized class
+      puts "#{ta[0]}" + " "*ti + "= #{ta[1]}::type_id::create(\"#{ta[0]}\", this);"
+    elsif item.get_mode==2 then  # parameterized class
+      puts "#{ta[0]}" + " "*ti + "= #{ta[1]}\#(#{ta[2]})::type_id::create(\"#{ta[0]}\", this);"
     else
-      puts tool_name "E002 Program BUG!!!"
+      puts tool_name + "E001 Program BUG!!!"
       next
     end
+
+  ### create sequence
+  elsif quest==2 then
+    if item.get_mode==1 then
+      puts "--- case1 ---"
+      puts "#{ta[0]}" + " "*ti + "= #{ta[1]}::type_id::create(\"#{ta[0]}\");"
+      puts "--- case2 ---"
+      puts "#{ta[0]}" + " "*ti + "= #{ta[1]}::type_id::create(\"#{ta[0]}\",,get_full_name());"
+    else
+      puts tool_name + "Failed to analyze sequence instance code..."
+    end
+  else
+    puts tool_name "E002 Program BUG!!!"
+    next
   end
 end
