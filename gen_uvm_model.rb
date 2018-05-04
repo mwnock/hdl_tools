@@ -6,11 +6,16 @@
 #--   - driver, sequencer and monitor's name are created by agent name
 #--------------------------------------------------------------------
 class Uvm_model
-  def initialize(model_name, agent_name, multi, vif_name)
+  def initialize(model_name, agent_name, agent_inst_name, multi, vif_name)
     @indent = "  "
     @head   = "_"
     @model_name = model_name
     @agent_name = agent_name
+    if agent_inst_name == "" then
+      @agent_inst_name  = agent_name
+    else
+      @agent_inst_name  = agent_inst_name
+    end
     @multi = multi
     @vif_name = vif_name
   end
@@ -31,13 +36,20 @@ class Uvm_model
     case sel
       when "class"
         "#{@model_name}_#{@agent_name}_agent"
+      when "agent"
+        @agent_name
       when "inst"
-        "#{@agent_name}"
+        #"#{@agent_name}"
+        @agent_inst_name
       when "multi"
         @multi
       else
         "unknown"
     end
+  end
+
+  def set_agent_inst(name)
+    @inst_name = name
   end
 
   def driver(sel)
@@ -149,10 +161,16 @@ uvm_model_array = Array.new(agent_kind_num)
   printf("%s Number %d agent has multi ? (y/n) : ", prompt, num+1)
   multi = STDIN.gets.chomp
 
+  agent_inst_name = ""
+  if multi=="y" then
+    agent_inst_name = "#{agent_name}s"
+  end
+
   printf("%s Number %d agent's using interface name : ", prompt, num+1)
   vif_name = STDIN.gets.chomp
 
-  m_uvm_model = Uvm_model.new(model_name, agent_name, multi, vif_name)
+  #m_uvm_model = Uvm_model.new(model_name, agent_name, multi, vif_name)
+  m_uvm_model = Uvm_model.new(model_name, agent_name, agent_inst_name, multi, vif_name)
   uvm_model_array[num] = m_uvm_model.clone
 end
 
@@ -183,7 +201,8 @@ open("#{dir_model_body}/#{class_name}.sv", "w") {|file|
   ### members (agent, etc...)
   uvm_model_array.each do |item|
     str = ""
-    str = "s[]" if(item.agent("multi")=="y")
+    #str = "s[]" if(item.agent("multi")=="y")
+    str = "[]" if(item.agent("multi")=="y")
     file.puts "#{item.indent}#{item.agent("class")} #{item.agent("inst")}#{str};"
   end
 
@@ -191,7 +210,8 @@ open("#{dir_model_body}/#{class_name}.sv", "w") {|file|
   utils_flag = 0
   uvm_model_array.each do |item|
     if(item.agent("multi")=="y")then
-      file.puts "#{item.indent}int num_#{item.agent("inst")}s;"
+      #file.puts "#{item.indent}int num_#{item.agent("inst")}s;"
+      file.puts "#{item.indent}int num_#{item.agent("inst")};"
       utils_flag = 1
     end
   end
@@ -204,7 +224,8 @@ open("#{dir_model_body}/#{class_name}.sv", "w") {|file|
     file.puts "#{indent}`uvm_component_utils_begin(#{class_name})"
     uvm_model_array.each do |item|
       if(item.agent("multi")=="y")then
-        file.puts "#{indent*2}`uvm_field_int(num_#{item.agent("inst")}s, UVM_DEFAULT)"
+        #file.puts "#{indent*2}`uvm_field_int(num_#{item.agent("inst")}s, UVM_DEFAULT)"
+        file.puts "#{indent*2}`uvm_field_int(num_#{item.agent("inst")}, UVM_DEFAULT)"
       end
     end
     file.puts "#{indent}`uvm_component_utils_end"
@@ -222,13 +243,11 @@ open("#{dir_model_body}/#{class_name}.sv", "w") {|file|
   file.puts "#{indent*2}#{build_super}"
   uvm_model_array.each do |item|
     if(item.agent("multi")=="y")then
-      tmp = "#{item.agent("inst")}s"
-      file.puts "#{item.indent*2}begin"
-      file.puts "#{item.indent*3}int i;"
-      file.puts "#{item.indent*3}#{tmp} = new[num_#{tmp}];"
-      file.puts "#{item.indent*3}for(i=0; i<num_#{tmp}-1; i++)begin"
-      file.puts "#{item.indent*4}#{tmp}[i] = #{item.agent("class")}::type_id::create\(\$sformatf\(\"#{tmp}[%0d]\", i\)\);"
-      file.puts "#{item.indent*3}end"
+      #tmp = "#{item.agent("inst")}s"
+      tmp = "#{item.agent("inst")}"
+      file.puts "#{item.indent*2}#{tmp} = new[num_#{tmp}];"
+      file.puts "#{item.indent*2}for(int i=0; i<num_#{tmp}; i++)begin"
+      file.puts "#{item.indent*3}#{tmp}[i] = #{item.agent("class")}::type_id::create\(\$sformatf\(\"#{tmp}[%0d]\", i\), this\);"
       file.puts "#{item.indent*2}end"
     else
       file.puts "#{indent*2}#{item.agent("inst")} = #{item.agent("class")}::type_id::create(\"#{item.agent("inst")}\", this);"
@@ -371,8 +390,6 @@ endclass
 `endif
 HERE
   }
-
-
   ### uvm_sequence_item (sample)
   class_name = item.seq_item
   open("#{dir_model_body}/#{class_name}.sv", "w") {|file|
@@ -380,9 +397,7 @@ HERE
 `ifndef #{class_name.upcase}
 `define #{class_name.upcase}
 class #{class_name} extends uvm_sequence_item;
-
 #{item.indent}logic [31:0] addr, data;
-
 #{item.indent}`uvm_object_utils(#{class_name})
 
 #{item.indent}#{new_begin("uvm_object", "#{class_name}_inst")}
@@ -393,21 +408,17 @@ endclass
 `endif
 HERE
   }
-
-
   ### uvm_seq_base (sample)
   class_name = item.seq_lib
   open("#{dir_model_body}/#{class_name}.sv", "w") {|file|
     file.puts <<"HERE"
 `ifndef #{class_name.upcase}
 `define #{class_name.upcase}
-virtual class #{item.model}_#{item.agent("inst")}_base_seq extends uvm_sequence \#(#{item.seq_item});
-
+virtual class #{item.model}_#{item.agent("agent")}_base_seq extends uvm_sequence \#(#{item.seq_item});
 #{item.indent}function new(string name="#{class_name}");
 #{item.indent*2}super.new(name);
 #{item.indent*2}do_not_randomize = 1;
 #{item.indent}endfunction
-
 #{item.indent}virtual task pre_body();
 #{item.indent*2}if (starting_phase!=null) begin
 #{item.indent*3}`uvm_info(get_type_name(),
@@ -433,11 +444,11 @@ virtual class #{item.model}_#{item.agent("inst")}_base_seq extends uvm_sequence 
 endclass
 
 ///-----------------------------------------------------------------
-class #{item.agent("inst")}_sample_seq extends #{item.model}_#{item.agent("inst")}_base_seq;
+class #{item.agent("agent")}_sample_seq extends #{item.model}_#{item.agent("agent")}_base_seq;
 
-#{item.indent}`uvm_object_utils(#{item.agent("inst")}_sample_seq)
+#{item.indent}`uvm_object_utils(#{item.agent("agent")}_sample_seq)
 
-#{item.indent}function new (string name="#{item.agent("inst")}_sample_seq");
+#{item.indent}function new (string name="#{item.agent("agent")}_sample_seq");
 #{item.indent*2}super.new(name);
 #{item.indent}endfunction : new
 
@@ -455,8 +466,6 @@ endclass
 `endif
 HERE
   }
-
-
   ### interface (sample)
   filename = item.vif_name
   open("#{dir_model_body}/#{filename}.sv", "w") {|file|
@@ -466,8 +475,6 @@ interface #{item.vif_name}(input logic clk, rstz);
 endinterface
 HERE
   }
-
-
   ### "model_name"_model.svh
   filename = "#{item.model}_model.svh"
   open("#{dir_model_body}/#{filename}", "a") {|file|
@@ -478,13 +485,9 @@ HERE
 `include "#{item.sequencer("class")}.sv"
 `include "#{item.monitor("class")}.sv"
 `include "#{item.agent("class")}.sv"
-
 HERE
   }
-
 end
-
-
 ### "model_name"_model.svh
 filename = "#{model_name}_model.svh"
 open("#{dir_model_body}/#{filename}", "a") {|file|
@@ -517,21 +520,25 @@ class tb_env extends uvm_env;
 
   ///////////////////////////////////////////////////////////////
   `uvm_component_utils(tb_env)
-
   function new (string name, uvm_component parent);
     super.new(name,parent);
   endfunction : new
-
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
+HERE
+uvm_model_array.each do |item|
+  if item.agent("multi")=="y" then
+    file.puts "#{item.indent*2}uvm_config_db#(int)::set(this, \"#{model_name}\", \"num_#{item.agent("inst")}*\", 1);"
+  end
+end
+
+file.puts <<"HERE"
     #{model_name} = #{model_name}_env::type_id::create("#{model_name}", this);
   endfunction : build_phase
-
   function void connect_phase(uvm_phase phase);
     /// connect a scoreboard to a monitor
     /// connect model's sequencer to "sequencer in the virtual_sequencer"
   endfunction : connect_phase
-
 endclass
 `endif
 HERE
@@ -554,33 +561,27 @@ open("#{dir_model_tb}/#{filename}", "w") {|file|
     endfunction
 ///-------------------------------------------------------------------------------------------
 virtual class base_test extends uvm_test;
-
   tb_env tb;
-
   function new (string name="base_test", uvm_component parent=null);
     super.new(name, parent);
   endfunction : new
-
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
     tb = tb_env::type_id::create("tb", this);
   endfunction
-
   task run_phase(uvm_phase phase);
     uvm_top.print_topology();
   endtask : run_phase
-
 endclass
 ///-------------------------------------------------------------------------------------------
 `uvm_test_head(sample_test)
   function void build_phase(uvm_phase phase);
 HERE
-
   cnt = 0
   uvm_model_array.each do |item|
     str = ""
     str = "[#{cnt}]" if(item.agent("multi")=="y")
-    file.puts "#{item.indent*2}`set_seq(tb.#{model_name}.#{item.agent("inst")}#{str}.#{item.sequencer("inst")}.run_phase, #{item.agent("inst")}_sample_seq)"
+    file.puts "#{item.indent*2}`set_seq(tb.#{model_name}.#{item.agent("inst")}#{str}.#{item.sequencer("inst")}.run_phase, #{item.agent("agent")}_sample_seq)"
     cnt = cnt + 1
   end
 
@@ -591,8 +592,6 @@ endclass
 `endif
 HERE
 }
-
-
 ### tb_top.sv
 filename = "tb_top.sv"
 open("#{dir_model_tb}/#{filename}", "w") {|file|
@@ -602,7 +601,6 @@ module tb_top;
   /// UVM Class Libraries
   `include "uvm_macros.svh"
   import uvm_pkg::*;
-
   /// Models
   `include "#{model_name}_model.svh"
 
@@ -630,7 +628,6 @@ HERE
     #100;
     forever #50 clk <= ~clk;
   end
-
   // rstz
   initial begin
     rstz     <= 1'b0;
